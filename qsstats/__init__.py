@@ -6,16 +6,19 @@ from django.conf import settings
 from django.db.models import Count
 import datetime
 
-class InvalidInterval(Exception):
+class QuerySetStatsError(Exception):
     pass
 
-class InvalidOperator(Exception):
+class InvalidInterval(QuerySetStatsError):
     pass
 
-class DateFieldMissing(Exception):
+class InvalidOperator(QuerySetStatsError):
     pass
 
-class QuerySetMissing(Exception):
+class DateFieldMissing(QuerySetStatsError):
+    pass
+
+class QuerySetMissing(QuerySetStatsError):
     pass
 
 class QuerySetStats(object):
