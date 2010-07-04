@@ -1,7 +1,7 @@
 __author__ = 'Matt Croydon'
 __version__ = (0, 3, 1)
 
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta, MO
 from django.conf import settings
 from django.db.models import Count
 import datetime
@@ -54,6 +54,22 @@ class QuerySetStats(object):
 
     def this_day(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_day(self.today, date_field, aggregate_field, aggregate_class)
+
+    def for_week(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
+        date_field = date_field or self.date_field
+        aggregate_class = aggregate_class or self.aggregate_class
+        aggregate_field = aggregate_field or self.aggregate_field
+
+        self.check_date_field(date_field)
+        self.check_qs()
+
+        first_day = dt - relativedelta(weekday=MO(-1))
+        last_day = first_day + datetime.timedelta(days=7)
+
+        return self.get_aggregate(first_day, last_day, date_field, aggregate_field, aggregate_class)
+
+    def this_week(self, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_week(self.today, date_field, aggregate_class)
 
     def for_month(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
         date_field = date_field or self.date_field
@@ -126,7 +142,7 @@ class QuerySetStats(object):
         aggregate_class = aggregate_class or self.aggregate_class
         aggregate_field = aggregate_field or self.aggregate_field
         operator = operator or self.operator
-        
+
         self.check_date_field(date_field)
         self.check_qs()
         if operator not in ['lt', 'lte', 'gt', 'gte']:
@@ -153,4 +169,3 @@ class QuerySetStats(object):
     def check_qs(self):
         if not self.qs:
             raise QuerySetMissing("Please provide a queryset.")
-

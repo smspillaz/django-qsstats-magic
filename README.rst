@@ -28,11 +28,12 @@ How many users signed up today? this month? this year?
 
     from django.contrib.auth import User
     import qsstats
-    
+
     qs = User.objects.all()
     qss = qsstats.QuerySetStats(qs, 'date_joined')
-    
+
     print '%s new accounts today.' % qss.this_day()
+    print '%s new accounts this week.' % qss.this_week()
     print '%s new accounts this month.' % qss.this_month()
     print '%s new accounts this year.' % qss.this_year()
     print '%s new accounts until now.' % qss.until_now()
@@ -40,6 +41,7 @@ How many users signed up today? this month? this year?
 This might print something like::
 
     5 new accounts today.
+    11 new accounts this week.
     27 new accounts this month.
     377 new accounts this year.
     409 new accounts until now.
@@ -54,7 +56,7 @@ Aggregating time-series data suitable for graphing
 
     qs = User.objects.all()
     qss = qsstats.QuerySetStats(qs, 'date_joined')
-    
+
     today = datetime.date.today()
     seven_days_ago = today - datetime.timedelta(days=7)
 
@@ -81,7 +83,7 @@ without providing enough information.
 
 ``qs``
     The queryset to operate on.
-    
+
     Default: ``None``
 
 ``date_field``
@@ -93,7 +95,7 @@ without providing enough information.
     The field to use for aggregate data.  Can be set system-wide with
     the setting ``QUERYSETSTATS_DEFAULT_AGGREGATE_FIELD`` or set when
     instantiating or calling one of the methods.
-    
+
     Default: ``'id'``
 
 ``aggregate_class``
@@ -107,7 +109,7 @@ without providing enough information.
     The default operator to use for the ``pivot`` function.  Can be set
     system-wide with the setting ``QUERYSETSTATS_DEFAULT_OPERATOR`` or
     set when calling ``pivot``.
-    
+
     Default: ``'lte'``
 
 
@@ -121,6 +123,12 @@ Once you have a ``QuerySetStats`` object instantiated, you can receive a single 
 
 ``this_day``
     A wrapper around ``for_day`` that provides aggregate information for ``datetime.date.today()``.  It takes no positional arguments.
+
+``for_week``
+    Positional arguments: ``dt``, a ``datetime.datetime`` or ``datetime.date`` object to filter the queryset to this week.
+
+``this_week``
+    A wrapper around ``for_week`` that provides aggregate information for this current week.
 
 ``for_month``
     Positional arguments: ``dt``, a ``datetime.datetime`` or ``datetime.date`` object to filter the queryset to this month.
@@ -162,7 +170,7 @@ time-series data which may be extremely using in plotting data:
 ``until``
     Provide aggregate information until a given date or time, filtering the
     queryset using ``lte``.
-    
+
     Positional arguments: ``dt`` a ``datetime.date`` or ``datetime.datetime``
     object to be used for filtering the queryset since.
 
@@ -179,10 +187,10 @@ time-series data which may be extremely using in plotting data:
 ``after``
     Aggregate information after a given date or time, filtering the queryset
     using ``gte``.
-    
+
     Positional arguments: ``dt`` a ``datetime.date`` or ``datetime.datetime``
     object to be used for filtering the queryset since.
-    
+
     Keyword arguments: ``date_field``, ``aggregate_field``, ``aggregate_class``.
 
 ``after_now``
@@ -201,7 +209,7 @@ time-series data which may be extremely using in plotting data:
     object to be used for filtering the queryset since (using ``lte``).
 
     Keyword arguments: ``operator``, ``date_field``, ``aggregate_field``, ``aggregate_class``.
-    
+
     Raises ``InvalidOperator`` if the operator provided is not one of ``'lt'``,
     ``'lte'``, ``gt`` or ``gte``.
 
