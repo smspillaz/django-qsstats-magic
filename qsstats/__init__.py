@@ -2,9 +2,11 @@ __author__ = 'Matt Croydon'
 __version__ = (0, 3, 1)
 
 from dateutil.relativedelta import relativedelta, MO
+from dateutil.parser import parse
 from django.conf import settings
 from django.db.models import Count
 import datetime
+import time
 
 class QuerySetStatsError(Exception):
     pass
@@ -80,16 +82,6 @@ class QuerySetStats(object):
     def time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
         if interval not in ('years', 'months', 'weeks', 'days'):
             raise InvalidInterval('Inverval not supported.')
-
-        date_field = date_field or self.date_field
-        aggregate_class = aggregate_class or self.aggregate_class
-        aggregate_field = aggregate_field or self.aggregate_field
-
-        if not date_field:
-            raise DateFieldMissing("Please provide a date_field.")
-
-        if not self.qs:
-            raise QuerySetMissing("Please provide a queryset.")
 
         stat_list = []
         dt = start_date
