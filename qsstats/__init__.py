@@ -131,6 +131,7 @@ class QuerySetStats(object):
         start_date, _ = get_bounds(start_date, interval.rstrip('s'))
         _, end_date = get_bounds(end_date, interval.rstrip('s'))
 
+        # sql should return the beginning of each interval
         SQL = {
             'mysql': {
                 'days': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d')",
