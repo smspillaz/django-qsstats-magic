@@ -26,6 +26,30 @@ class DateFieldMissing(QuerySetStatsError):
 class QuerySetMissing(QuerySetStatsError):
     pass
 
+
+def get_bounds(dt, interval):
+    ''' Returns interval bounds the datetime is in.
+    Interval can be day, week, month and year. '''
+
+    # what about hours?
+    day = datetime.date(year=dt.year, month=dt.month, day=dt.day)
+
+    if interval == 'day':
+        first_day = last_day = day
+    elif interval == 'week':
+        first_day = day - relativedelta(weekday=MO(-1))
+        last_day = first_day + datetime.timedelta(days=7)
+    elif interval == 'month':
+        first_day = datetime.date(year=dt.year, month=dt.month, day=1)
+        last_day = first_day + relativedelta(day=31)
+    elif interval == 'year':
+        first_day = datetime.date(year=dt.year, month=1, day=1)
+        last_day = datetime.date(year=dt.year, month=12, day=31)
+    else:
+        raise InvalidInterval('Inverval not supported.')
+    return first_day, last_day
+
+
 class QuerySetStats(object):
     """
     Generates statistics about a queryset using Django aggregates.  QuerySetStats
@@ -57,24 +81,21 @@ class QuerySetStats(object):
         return self.for_day(self.today, date_field, aggregate_field, aggregate_class)
 
     def for_week(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        first_day = dt - relativedelta(weekday=MO(-1))
-        last_day = first_day + datetime.timedelta(days=7)
+        first_day, last_day = get_bounds(dt, 'week')
         return self.get_aggregate(first_day, last_day, date_field, aggregate_field, aggregate_class)
 
     def this_week(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_week(self.today, date_field, aggregate_class)
 
     def for_month(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        first_day = datetime.date(year=dt.year, month=dt.month, day=1)
-        last_day = first_day + relativedelta(day=31)
+        first_day, last_day = get_bounds(dt, 'month')
         return self.get_aggregate(first_day, last_day, date_field, aggregate_field, aggregate_class)
 
     def this_month(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_month(self.today, date_field, aggregate_class)
 
     def for_year(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        first_day = datetime.date(year=dt.year, month=1, day=1)
-        last_day = datetime.date(year=dt.year, month=12, day=31)
+        first_day, last_day = get_bounds(dt, 'year')
         return self.get_aggregate(first_day, last_day, date_field, aggregate_field, aggregate_class)
 
     def this_year(self, date_field=None, aggregate_field=None, aggregate_class=None):
@@ -83,9 +104,14 @@ class QuerySetStats(object):
     # Aggregate over time intervals
 
     def time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
-        if interval not in ('years', 'months', 'weeks', 'days'):
-            raise InvalidInterval('Inverval not supported.')
+        try:
+            return self._fast_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class)
+        except QuerySetStatsError:
+            return self._slow_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class)
 
+    def _slow_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
+        if interval not in ('years', 'months', 'weeks', 'days'):
+            raise InvalidInterval('Interval not supported.')
         stat_list = []
         dt = start_date
         while dt < end_date:
@@ -95,15 +121,21 @@ class QuerySetStats(object):
             dt = dt + relativedelta(**{interval : 1})
         return stat_list
 
-
     def _fast_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
         date_field = date_field or self.date_field
         aggregate_field = aggregate_field or self.aggregate_field
         aggregate_class = aggregate_class or self.aggregate_class
 
+        # partial interval aggregation doesn't make sense and it is not
+        # supported by _slow_time_series
+        start_date, _ = get_bounds(start_date, interval.rstrip('s'))
+        _, end_date = get_bounds(end_date, interval.rstrip('s'))
+
         SQL = {
             'mysql': {
                 'days': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d')",
+                'months': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-01')",
+                'years': "DATE_FORMAT(`" + date_field +"`, '%%Y-01-01')",
             }
         }
 
@@ -115,7 +147,7 @@ class QuerySetStats(object):
         try:
             interval_sql = engine_sql[interval]
         except KeyError:
-            raise InvalidInterval('Inverval not supported.')
+            raise InvalidInterval('Interval is not supported for this DB backend.')
 
         kwargs = {'%s__range' % date_field : (start_date, end_date)}
         aggregate = self.qs.extra(select = {'d': interval_sql}).\
@@ -125,13 +157,13 @@ class QuerySetStats(object):
         data = dict((parse(item['d'], yearfirst=True).date(), item['agg']) for item in aggregate)
 
         stat_list = []
-        dt = start_date.date()
-        end_date = end_date.date()
+        dt = start_date
+        end_date = end_date
         while dt < end_date:
-            stat_list.append((dt, data.get(dt, 0),))
+            value = data.get(dt, 0) # this will not work if dt is datetime
+            stat_list.append((dt, value,))
             dt = dt + relativedelta(**{interval : 1})
         return stat_list
-
 
 
     # Aggregate totals using a date or datetime as a pivot
