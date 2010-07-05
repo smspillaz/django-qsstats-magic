@@ -14,6 +14,9 @@ class QuerySetStatsError(Exception):
 class InvalidInterval(QuerySetStatsError):
     pass
 
+class UnsupportedEngine(QuerySetStatsError):
+    pass
+
 class InvalidOperator(QuerySetStatsError):
     pass
 
@@ -91,6 +94,45 @@ class QuerySetStats(object):
             stat_list.append((dt, method(dt, date_field=date_field, aggregate_field=aggregate_field, aggregate_class=aggregate_class)))
             dt = dt + relativedelta(**{interval : 1})
         return stat_list
+
+
+    def _fast_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
+        date_field = date_field or self.date_field
+        aggregate_field = aggregate_field or self.aggregate_field
+        aggregate_class = aggregate_class or self.aggregate_class
+
+        SQL = {
+            'mysql': {
+                'days': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d')",
+            }
+        }
+
+        try:
+            engine_sql = SQL[engine]
+        except KeyError:
+            raise UnsupportedEngine('%s DB engine is not supported' % engine)
+
+        try:
+            interval_sql = engine_sql[interval]
+        except KeyError:
+            raise InvalidInterval('Inverval not supported.')
+
+        kwargs = {'%s__range' % date_field : (start_date, end_date)}
+        aggregate = self.qs.extra(select = {'d': interval_sql}).\
+                        filter(**kwargs).order_by().values('d').\
+                        annotate(agg=aggregate_class(aggregate_field))
+
+        data = dict((parse(item['d'], yearfirst=True).date(), item['agg']) for item in aggregate)
+
+        stat_list = []
+        dt = start_date.date()
+        end_date = end_date.date()
+        while dt < end_date:
+            stat_list.append((dt, data.get(dt, 0),))
+            dt = dt + relativedelta(**{interval : 1})
+        return stat_list
+
+
 
     # Aggregate totals using a date or datetime as a pivot
 
