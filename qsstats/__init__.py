@@ -103,9 +103,9 @@ class QuerySetStats(object):
 
     # Aggregate over time intervals
 
-    def time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
+    def time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
         try:
-            return self._fast_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class)
+            return self._fast_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class, engine)
         except QuerySetStatsError:
             return self._slow_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class)
 
@@ -134,6 +134,7 @@ class QuerySetStats(object):
         SQL = {
             'mysql': {
                 'days': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d')",
+                'weeks': "DATE_FORMAT(DATE_SUB(`"+date_field+"`, INTERVAL(WEEKDAY(`"+date_field+"`)) DAY), '%%Y-%%m-%%d')",
                 'months': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-01')",
                 'years': "DATE_FORMAT(`" + date_field +"`, '%%Y-01-01')",
             }
