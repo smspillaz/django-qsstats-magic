@@ -202,7 +202,7 @@ class QuerySetStats(object):
         if not date_field:
             raise DateFieldMissing("Please provide a date_field.")
 
-        if not self.qs:
+        if self.qs is None:
             raise QuerySetMissing("Please provide a queryset.")
 
         agg = self.qs.filter(**filter).aggregate(agg=aggregate_class(aggregate_field))
