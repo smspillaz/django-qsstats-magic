@@ -103,7 +103,8 @@ class QuerySetStats(object):
 
     # Aggregate over time intervals
 
-    def time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
+    def time_series(self, start_date, end_date=None, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
+        end_date = end_date or self.today + datetime.timedelta(days=1)
         try:
             return self._fast_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class, engine)
         except QuerySetStatsError:
