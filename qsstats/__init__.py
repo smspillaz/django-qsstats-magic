@@ -110,7 +110,7 @@ class QuerySetStats(object):
         end_date = end_date or self.today + datetime.timedelta(days=1)
         try:
             return self._fast_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class, engine)
-        except (QuerySetStatsError, DatabaseError):
+        except (QuerySetStatsError, DatabaseError,):
             return self._slow_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class)
 
     def _slow_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
