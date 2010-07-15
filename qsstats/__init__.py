@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta, MO
 from dateutil.parser import parse
 from django.conf import settings
 from django.db.models import Count
+from django.db import DatabaseError
 import datetime
 import time
 
@@ -26,13 +27,15 @@ class DateFieldMissing(QuerySetStatsError):
 class QuerySetMissing(QuerySetStatsError):
     pass
 
+def _to_date(dt):
+    return datetime.date(year=dt.year, month=dt.month, day=dt.day)
 
 def get_bounds(dt, interval):
     ''' Returns interval bounds the datetime is in.
     Interval can be day, week, month and year. '''
 
     # what about hours?
-    day = datetime.date(year=dt.year, month=dt.month, day=dt.day)
+    day = _to_date(dt)
 
     if interval == 'day':
         first_day = last_day = day
@@ -107,14 +110,15 @@ class QuerySetStats(object):
         end_date = end_date or self.today + datetime.timedelta(days=1)
         try:
             return self._fast_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class, engine)
-        except QuerySetStatsError:
+        except (QuerySetStatsError, DatabaseError):
             return self._slow_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class)
 
     def _slow_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
         if interval not in ('years', 'months', 'weeks', 'days'):
             raise InvalidInterval('Interval not supported.')
         stat_list = []
-        dt = start_date
+        dt = _to_date(start_date)
+        end_date = _to_date(end_date)
         while dt < end_date:
             # MC_TODO: Less hacky way of doing this?
             method = getattr(self, 'for_%s' % interval.rstrip('s'))
