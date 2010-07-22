@@ -28,29 +28,34 @@ class QuerySetMissing(QuerySetStatsError):
     pass
 
 def _to_date(dt):
-    return datetime.date(year=dt.year, month=dt.month, day=dt.day)
+    return datetime.date(dt.year, dt.month, dt.day)
+
+def _to_datetime(dt):
+    if isinstance(dt, datetime.datetime):
+        return dt
+    return datetime.datetime(dt.year, dt.month, dt.day)
 
 def get_bounds(dt, interval):
     ''' Returns interval bounds the datetime is in.
     Interval can be day, week, month and year. '''
 
-    # what about hours?
-    day = _to_date(dt)
+    day = _to_datetime(_to_date(dt))
+    dt = _to_datetime(dt)
 
     if interval == 'day':
-        first_day = last_day = day
+        begin = end = day
     elif interval == 'week':
-        first_day = day - relativedelta(weekday=MO(-1))
-        last_day = first_day + datetime.timedelta(days=7)
+        begin = day - relativedelta(weekday=MO(-1))
+        end = begin + datetime.timedelta(days=7)
     elif interval == 'month':
-        first_day = datetime.date(year=dt.year, month=dt.month, day=1)
-        last_day = first_day + relativedelta(day=31)
+        begin = datetime.datetime(dt.year, dt.month, 1)
+        end = begin + relativedelta(day=31)
     elif interval == 'year':
-        first_day = datetime.date(year=dt.year, month=1, day=1)
-        last_day = datetime.date(year=dt.year, month=12, day=31)
+        begin = datetime.datetime(dt.year, 1, 1)
+        end = datetime.datetime(dt.year, 12, 31)
     else:
         raise InvalidInterval('Inverval not supported.')
-    return first_day, last_day
+    return begin, end
 
 
 class QuerySetStats(object):
@@ -85,21 +90,24 @@ class QuerySetStats(object):
 
     def for_week(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
         first_day, last_day = get_bounds(dt, 'week')
-        return self.get_aggregate(first_day, last_day, date_field, aggregate_field, aggregate_class)
+        return self.get_aggregate(_to_date(first_day), _to_date(last_day),
+                                  date_field, aggregate_field, aggregate_class)
 
     def this_week(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_week(self.today, date_field, aggregate_class)
 
     def for_month(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
         first_day, last_day = get_bounds(dt, 'month')
-        return self.get_aggregate(first_day, last_day, date_field, aggregate_field, aggregate_class)
+        return self.get_aggregate(_to_date(first_day), _to_date(last_day),
+                                  date_field, aggregate_field, aggregate_class)
 
     def this_month(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_month(self.today, date_field, aggregate_class)
 
     def for_year(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
         first_day, last_day = get_bounds(dt, 'year')
-        return self.get_aggregate(first_day, last_day, date_field, aggregate_field, aggregate_class)
+        return self.get_aggregate(_to_date(first_day), _to_date(last_day),
+                                  date_field, aggregate_field, aggregate_class)
 
     def this_year(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_year(self.today, date_field, aggregate_field, aggregate_class)
@@ -108,21 +116,25 @@ class QuerySetStats(object):
 
     def time_series(self, start_date, end_date=None, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
         end_date = end_date or self.today + datetime.timedelta(days=1)
+        args = [start_date, end_date, interval, date_field, aggregate_field, aggregate_class]
         try:
-            return self._fast_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class, engine)
+            return self._fast_time_series(*(args+[engine]))
         except (QuerySetStatsError, DatabaseError,):
-            return self._slow_time_series(start_date, end_date, interval, date_field, aggregate_field, aggregate_class)
+            return self._slow_time_series(*args)
 
     def _slow_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
         if interval not in ('years', 'months', 'weeks', 'days'):
             raise InvalidInterval('Interval not supported.')
         stat_list = []
-        dt = _to_date(start_date)
-        end_date = _to_date(end_date)
+        dt = _to_datetime(start_date)
+        end_date = _to_datetime(end_date)
         while dt < end_date:
             # MC_TODO: Less hacky way of doing this?
             method = getattr(self, 'for_%s' % interval.rstrip('s'))
-            stat_list.append((dt, method(dt, date_field=date_field, aggregate_field=aggregate_field, aggregate_class=aggregate_class)))
+            result = method(dt, date_field=date_field,
+                            aggregate_field=aggregate_field,
+                            aggregate_class=aggregate_class)
+            stat_list.append((dt, result,))
             dt = dt + relativedelta(**{interval : 1})
         return stat_list
 
@@ -154,20 +166,20 @@ class QuerySetStats(object):
         try:
             interval_sql = engine_sql[interval]
         except KeyError:
-            raise InvalidInterval('Interval is not supported for this DB backend.')
+            raise InvalidInterval('Interval is not supported for %s DB backend.' % engine)
 
         kwargs = {'%s__range' % date_field : (start_date, end_date)}
         aggregate = self.qs.extra(select = {'d': interval_sql}).\
                         filter(**kwargs).order_by().values('d').\
                         annotate(agg=aggregate_class(aggregate_field))
 
-        data = dict((parse(item['d'], yearfirst=True).date(), item['agg']) for item in aggregate)
+        data = dict((parse(item['d'], yearfirst=True), item['agg']) for item in aggregate)
 
         stat_list = []
         dt = start_date
         end_date = end_date
         while dt < end_date:
-            value = data.get(dt, 0) # this will not work if dt is datetime
+            value = data.get(dt, 0)
             stat_list.append((dt, value,))
             dt = dt + relativedelta(**{interval : 1})
         return stat_list
