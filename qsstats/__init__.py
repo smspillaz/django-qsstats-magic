@@ -6,6 +6,7 @@ from dateutil.parser import parse
 from django.conf import settings
 from django.db.models import Count
 from django.db import DatabaseError
+from functools import partial
 import datetime
 import time
 
@@ -42,7 +43,13 @@ def get_bounds(dt, interval):
     day = _to_datetime(_to_date(dt))
     dt = _to_datetime(dt)
 
-    if interval == 'day':
+    if interval == 'minute':
+        begin = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute)
+        end = begin + relativedelta(minutes=1)
+    elif interval == 'hour':
+        begin = datetime.datetime(dt.year, dt.month, dt.day, dt.hour)
+        end = begin + relativedelta(hours=1)
+    elif interval == 'day':
         begin = end = day
     elif interval == 'week':
         begin = day - relativedelta(weekday=MO(-1))
@@ -76,6 +83,30 @@ class QuerySetStats(object):
 
     # Aggregates for a specific period of time
 
+    def for_interval(self, interval, dt, date_field=None, aggregate_field=None, aggregate_class=None):
+        begin, end = get_bounds(dt, interval)
+        return self.get_aggregate(begin, end, date_field, aggregate_field, aggregate_class)
+
+    def this_interval(self, interval, date_field=None, aggregate_field=None, aggregate_class=None):
+        method = getattr(self, 'for_%s' % interval)
+        return method(self.today, date_field, aggregate_field, aggregate_class)
+
+    # code below is without magic so IDE autocomplete will work
+    # the short version would be:
+
+#    def __getattr__(self, name):
+#        if name.startswith('for_'):
+#            return partial(self.for_interval, name[4:])
+#        if name.startswith('this_'):
+#            return partial(self.this_interval, name[5:])
+#
+
+    def for_minute(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_interval('minute', dt, date_field, aggregate_field, aggregate_class)
+
+    def for_hour(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_interval('hour', dt, date_field, aggregate_field, aggregate_class)
+
     def for_day(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
         date_field = date_field or self.date_field
         kwargs = {
@@ -85,29 +116,30 @@ class QuerySetStats(object):
         }
         return self._aggregate(date_field, aggregate_field, aggregate_class, kwargs)
 
+    def for_week(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_interval('week', dt, date_field, aggregate_field, aggregate_class)
+
+    def for_month(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_interval('month', dt, date_field, aggregate_field, aggregate_class)
+
+    def for_year(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_interval('year', dt, date_field, aggregate_field, aggregate_class)
+
+
+    def this_hour(self, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_hour(self.today, date_field, aggregate_field, aggregate_class)
+
+    def this_minute(self, date_field=None, aggregate_field=None, aggregate_class=None):
+        return self.for_minute(self.today, date_field, aggregate_field, aggregate_class)
+
     def this_day(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_day(self.today, date_field, aggregate_field, aggregate_class)
-
-    def for_week(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        first_day, last_day = get_bounds(dt, 'week')
-        return self.get_aggregate(_to_date(first_day), _to_date(last_day),
-                                  date_field, aggregate_field, aggregate_class)
 
     def this_week(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_week(self.today, date_field, aggregate_class)
 
-    def for_month(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        first_day, last_day = get_bounds(dt, 'month')
-        return self.get_aggregate(_to_date(first_day), _to_date(last_day),
-                                  date_field, aggregate_field, aggregate_class)
-
     def this_month(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_month(self.today, date_field, aggregate_class)
-
-    def for_year(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        first_day, last_day = get_bounds(dt, 'year')
-        return self.get_aggregate(_to_date(first_day), _to_date(last_day),
-                                  date_field, aggregate_field, aggregate_class)
 
     def this_year(self, date_field=None, aggregate_field=None, aggregate_class=None):
         return self.for_year(self.today, date_field, aggregate_field, aggregate_class)
@@ -123,7 +155,7 @@ class QuerySetStats(object):
             return self._slow_time_series(*args)
 
     def _slow_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
-        if interval not in ('years', 'months', 'weeks', 'days'):
+        if interval not in ('years', 'months', 'weeks', 'days', 'hours', 'minutes'):
             raise InvalidInterval('Interval not supported.')
         stat_list = []
         dt = _to_datetime(start_date)
@@ -145,12 +177,14 @@ class QuerySetStats(object):
 
         # partial interval aggregation doesn't make sense and it is not
         # supported by _slow_time_series
-        start_date, _ = get_bounds(start_date, interval.rstrip('s'))
-        _, end_date = get_bounds(end_date, interval.rstrip('s'))
+        begin, _ = get_bounds(start_date, interval.rstrip('s'))
+        _, end = get_bounds(end_date, interval.rstrip('s'))
 
         # sql should return the beginning of each interval
         SQL = {
             'mysql': {
+                'minutes': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d %%H:%%i')",
+                'hours': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d %%H:00')",
                 'days': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d')",
                 'weeks': "DATE_FORMAT(DATE_SUB(`"+date_field+"`, INTERVAL(WEEKDAY(`"+date_field+"`)) DAY), '%%Y-%%m-%%d')",
                 'months': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-01')",
@@ -168,7 +202,7 @@ class QuerySetStats(object):
         except KeyError:
             raise InvalidInterval('Interval is not supported for %s DB backend.' % engine)
 
-        kwargs = {'%s__range' % date_field : (start_date, end_date)}
+        kwargs = {'%s__range' % date_field : (begin, end)}
         aggregate = self.qs.extra(select = {'d': interval_sql}).\
                         filter(**kwargs).order_by().values('d').\
                         annotate(agg=aggregate_class(aggregate_field))
@@ -176,9 +210,8 @@ class QuerySetStats(object):
         data = dict((parse(item['d'], yearfirst=True), item['agg']) for item in aggregate)
 
         stat_list = []
-        dt = start_date
-        end_date = end_date
-        while dt < end_date:
+        dt = begin
+        while dt < end:
             value = data.get(dt, 0)
             stat_list.append((dt, value,))
             dt = dt + relativedelta(**{interval : 1})
