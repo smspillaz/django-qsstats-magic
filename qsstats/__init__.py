@@ -92,7 +92,7 @@ class QuerySetStats(object):
         return method(self.today, date_field, aggregate_field, aggregate_class)
 
     # code below is without magic so IDE autocomplete will work
-    # the short version would be:
+    # the short version would be (instead of all for_* and this_* methods):
 
 #    def __getattr__(self, name):
 #        if name.startswith('for_'):
@@ -150,19 +150,20 @@ class QuerySetStats(object):
         end_date = end_date or self.today + datetime.timedelta(days=1)
         args = [start_date, end_date, interval, date_field, aggregate_field, aggregate_class]
         try:
+            #TODO: engine should be guessed
             return self._fast_time_series(*(args+[engine]))
         except (QuerySetStatsError, DatabaseError,):
             return self._slow_time_series(*args)
 
     def _slow_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
-        if interval not in ('years', 'months', 'weeks', 'days', 'hours', 'minutes'):
+        try:
+            method = getattr(self, 'for_%s' % interval[:-1])
+        except AttributeError:
             raise InvalidInterval('Interval not supported.')
+
         stat_list = []
-        dt = _to_datetime(start_date)
-        end_date = _to_datetime(end_date)
+        dt, end_date = _to_datetime(start_date), _to_datetime(end_date)
         while dt < end_date:
-            # MC_TODO: Less hacky way of doing this?
-            method = getattr(self, 'for_%s' % interval.rstrip('s'))
             result = method(dt, date_field=date_field,
                             aggregate_field=aggregate_field,
                             aggregate_class=aggregate_class)
@@ -175,8 +176,6 @@ class QuerySetStats(object):
         aggregate_field = aggregate_field or self.aggregate_field
         aggregate_class = aggregate_class or self.aggregate_class
 
-        # partial interval aggregation doesn't make sense and it is not
-        # supported by _slow_time_series
         begin, _ = get_bounds(start_date, interval.rstrip('s'))
         _, end = get_bounds(end_date, interval.rstrip('s'))
 
