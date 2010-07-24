@@ -91,58 +91,12 @@ class QuerySetStats(object):
         method = getattr(self, 'for_%s' % interval)
         return method(self.today, date_field, aggregate_field, aggregate_class)
 
-    # code below is without magic so IDE autocomplete will work
-    # the short version would be (instead of all for_* and this_* methods):
-
-#    def __getattr__(self, name):
-#        if name.startswith('for_'):
-#            return partial(self.for_interval, name[4:])
-#        if name.startswith('this_'):
-#            return partial(self.this_interval, name[5:])
-#
-
-    def for_minute(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_interval('minute', dt, date_field, aggregate_field, aggregate_class)
-
-    def for_hour(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_interval('hour', dt, date_field, aggregate_field, aggregate_class)
-
-    def for_day(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        date_field = date_field or self.date_field
-        kwargs = {
-            '%s__year' % date_field : dt.year,
-            '%s__month' % date_field : dt.month,
-            '%s__day' % date_field : dt.day,
-        }
-        return self._aggregate(date_field, aggregate_field, aggregate_class, kwargs)
-
-    def for_week(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_interval('week', dt, date_field, aggregate_field, aggregate_class)
-
-    def for_month(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_interval('month', dt, date_field, aggregate_field, aggregate_class)
-
-    def for_year(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_interval('year', dt, date_field, aggregate_field, aggregate_class)
-
-
-    def this_hour(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_hour(self.today, date_field, aggregate_field, aggregate_class)
-
-    def this_minute(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_minute(self.today, date_field, aggregate_field, aggregate_class)
-
-    def this_day(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_day(self.today, date_field, aggregate_field, aggregate_class)
-
-    def this_week(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_week(self.today, date_field, aggregate_class)
-
-    def this_month(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_month(self.today, date_field, aggregate_class)
-
-    def this_year(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.for_year(self.today, date_field, aggregate_field, aggregate_class)
+    # support for this_* and for_* methods
+    def __getattr__(self, name):
+        if name.startswith('for_'):
+            return partial(self.for_interval, name[4:])
+        if name.startswith('this_'):
+            return partial(self.this_interval, name[5:])
 
     # Aggregate over time intervals
 
