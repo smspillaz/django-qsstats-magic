@@ -115,23 +115,23 @@ object.  These keyword arguments are ``date_field`` and ``aggregate``.
 Once you have a ``QuerySetStats`` object instantiated, you can receive a
 single aggregate result by using the following methods:
 
-``for_minute``
-``for_hour``
-``for_day``
-``for_week``
-``for_month``
-``for_year``
+* ``for_minute``
+* ``for_hour``
+* ``for_day``
+* ``for_week``
+* ``for_month``
+* ``for_year``
 
     Positional arguments: ``dt``, a ``datetime.datetime`` or ``datetime.date``
     object to filter the queryset to this interval (minute, hour, day, week,
     month or year).
 
-``this_minute``
-``this_hour``
-``this_day``
-``this_week``
-``this_month``
-``this_year``
+* ``this_minute``
+* ``this_hour``
+* ``this_day``
+* ``this_week``
+* ``this_month``
+* ``this_year``
 
     Wrappers around ``for_<interval>`` that uses ``dateutil.relativedelta`` to
     provide aggregate information for this current interval.
