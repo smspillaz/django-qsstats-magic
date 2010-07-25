@@ -15,7 +15,7 @@ class QuerySetStatsTestCase(TestCase):
         # Create a QuerySet and QuerySetStats
         qs = User.objects.filter(is_active=True)
         qss = QuerySetStats(qs, 'date_joined')
-        
+
         # We should only see a single user
         self.assertEqual(qss.this_day(), 1)
 
@@ -40,7 +40,7 @@ class QuerySetStatsTestCase(TestCase):
         u = User.objects.create_user('u', 'u@example.com')
         u.date_joined = today
         u.save()
-        
+
         qs = User.objects.all()
         qss = QuerySetStats(qs, 'date_joined')
 
@@ -57,7 +57,7 @@ class QuerySetStatsTestCase(TestCase):
         u = User.objects.create_user('u', 'u@example.com')
         u.date_joined = today
         u.save()
-        
+
         qs = User.objects.all()
         qss = QuerySetStats(qs, 'date_joined')
 

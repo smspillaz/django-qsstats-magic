@@ -1,69 +1,17 @@
-__author__ = 'Matt Croydon'
-__version__ = (0, 3, 1)
+__author__ = 'Matt Croydon, Mikhail Korobov'
+__version__ = (0, 5, 0)
 
-from dateutil.relativedelta import relativedelta, MO
+from functools import partial
+import datetime
+import time
+from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse
 from django.conf import settings
 from django.db.models import Count
 from django.db import DatabaseError
-from functools import partial
-import datetime
-import time
 
-class QuerySetStatsError(Exception):
-    pass
-
-class InvalidInterval(QuerySetStatsError):
-    pass
-
-class UnsupportedEngine(QuerySetStatsError):
-    pass
-
-class InvalidOperator(QuerySetStatsError):
-    pass
-
-class DateFieldMissing(QuerySetStatsError):
-    pass
-
-class QuerySetMissing(QuerySetStatsError):
-    pass
-
-def _to_date(dt):
-    return datetime.date(dt.year, dt.month, dt.day)
-
-def _to_datetime(dt):
-    if isinstance(dt, datetime.datetime):
-        return dt
-    return datetime.datetime(dt.year, dt.month, dt.day)
-
-def get_bounds(dt, interval):
-    ''' Returns interval bounds the datetime is in.
-    Interval can be day, week, month and year. '''
-
-    day = _to_datetime(_to_date(dt))
-    dt = _to_datetime(dt)
-
-    if interval == 'minute':
-        begin = datetime.datetime(dt.year, dt.month, dt.day, dt.hour, dt.minute)
-        end = begin + relativedelta(minutes=1)
-    elif interval == 'hour':
-        begin = datetime.datetime(dt.year, dt.month, dt.day, dt.hour)
-        end = begin + relativedelta(hours=1)
-    elif interval == 'day':
-        begin = end = day
-    elif interval == 'week':
-        begin = day - relativedelta(weekday=MO(-1))
-        end = begin + datetime.timedelta(days=7)
-    elif interval == 'month':
-        begin = datetime.datetime(dt.year, dt.month, 1)
-        end = begin + relativedelta(day=31)
-    elif interval == 'year':
-        begin = datetime.datetime(dt.year, 1, 1)
-        end = datetime.datetime(dt.year, 12, 31)
-    else:
-        raise InvalidInterval('Inverval not supported.')
-    return begin, end
-
+from qsstats.utils import get_bounds, _to_datetime, get_interval_sql
+from qsstats.exceptions import *
 
 class QuerySetStats(object):
     """
@@ -71,25 +19,23 @@ class QuerySetStats(object):
     is able to handle snapshots of data (for example this day, week, month, or
     year) or generate time series data suitable for graphing.
     """
-    def __init__(self, qs=None, date_field=None, aggregate_field=None, aggregate_class=None, operator=None):
+    def __init__(self, qs=None, date_field=None, aggregate=None):
         self.qs = qs
         self.date_field = date_field
-        self.aggregate_field = aggregate_field or getattr(settings, 'QUERYSETSTATS_DEFAULT_AGGREGATE_FIELD', 'id')
-        self.aggregate_class = aggregate_class or getattr(settings, 'QUERYSETSTATS_DEFAULT_AGGREGATE_CLASS', Count)
-        self.operator = operator or getattr(settings, 'QUERYSETSTATS_DEFAULT_OPERATOR', 'lte')
-
-        # MC_TODO: Danger in caching this?
+        self.aggregate = aggregate or Count('id')
         self.update_today()
 
     # Aggregates for a specific period of time
 
-    def for_interval(self, interval, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        begin, end = get_bounds(dt, interval)
-        return self.get_aggregate(begin, end, date_field, aggregate_field, aggregate_class)
+    def for_interval(self, interval, dt, date_field=None, aggregate=None):
+        start, end = get_bounds(dt, interval)
+        date_field = date_field or self.date_field
+        kwargs = {'%s__range' % date_field : (start, end)}
+        return self._aggregate(date_field, aggregate, kwargs)
 
-    def this_interval(self, interval, date_field=None, aggregate_field=None, aggregate_class=None):
+    def this_interval(self, interval, date_field=None, aggregate=None):
         method = getattr(self, 'for_%s' % interval)
-        return method(self.today, date_field, aggregate_field, aggregate_class)
+        return method(self.today, date_field, aggregate)
 
     # support for this_* and for_* methods
     def __getattr__(self, name):
@@ -97,110 +43,90 @@ class QuerySetStats(object):
             return partial(self.for_interval, name[4:])
         if name.startswith('this_'):
             return partial(self.this_interval, name[5:])
+        raise AttributeError
 
-    # Aggregate over time intervals
 
-    def time_series(self, start_date, end_date=None, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
-        end_date = end_date or self.today + datetime.timedelta(days=1)
-        args = [start_date, end_date, interval, date_field, aggregate_field, aggregate_class]
+    def time_series(self, start, end=None, interval='days',
+                    date_field=None, aggregate=None, engine='mysql'):
+        ''' Aggregate over time intervals '''
+        end = end or self.today + datetime.timedelta(days=1)
+        args = [start, end, interval, date_field, aggregate]
         try:
             #TODO: engine should be guessed
             return self._fast_time_series(*(args+[engine]))
         except (QuerySetStatsError, DatabaseError,):
             return self._slow_time_series(*args)
 
-    def _slow_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None):
-        try:
-            method = getattr(self, 'for_%s' % interval[:-1])
-        except AttributeError:
-            raise InvalidInterval('Interval not supported.')
+    def _slow_time_series(self, start, end, interval='days',
+                          date_field=None, aggregate=None):
+        ''' Aggregate over time intervals using 1 sql query for one interval '''
 
+        if interval not in ['minutes', 'hours', 'days', 'weeks', 'months', 'years']:
+            raise InvalidInterval('Interval is not supported.')
+
+        method = getattr(self, 'for_%s' % interval[:-1])
         stat_list = []
-        dt, end_date = _to_datetime(start_date), _to_datetime(end_date)
-        while dt < end_date:
-            result = method(dt, date_field=date_field,
-                            aggregate_field=aggregate_field,
-                            aggregate_class=aggregate_class)
-            stat_list.append((dt, result,))
+        dt, end = _to_datetime(start), _to_datetime(end)
+        while dt < end:
+            value = method(dt, date_field, aggregate)
+            stat_list.append((dt, value,))
             dt = dt + relativedelta(**{interval : 1})
         return stat_list
 
-    def _fast_time_series(self, start_date, end_date, interval='days', date_field=None, aggregate_field=None, aggregate_class=None, engine='mysql'):
+    def _fast_time_series(self, start, end, interval='days',
+                          date_field=None, aggregate=None, engine='mysql'):
+        ''' Aggregate over time intervals using just 1 sql query '''
         date_field = date_field or self.date_field
-        aggregate_field = aggregate_field or self.aggregate_field
-        aggregate_class = aggregate_class or self.aggregate_class
+        aggregate = aggregate or self.aggregate
 
-        begin, _ = get_bounds(start_date, interval.rstrip('s'))
-        _, end = get_bounds(end_date, interval.rstrip('s'))
+        start, _ = get_bounds(start, interval.rstrip('s'))
+        _, end = get_bounds(end, interval.rstrip('s'))
+        interval_sql = get_interval_sql(date_field, interval, engine)
 
-        # sql should return the beginning of each interval
-        SQL = {
-            'mysql': {
-                'minutes': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d %%H:%%i')",
-                'hours': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d %%H:00')",
-                'days': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-%%d')",
-                'weeks': "DATE_FORMAT(DATE_SUB(`"+date_field+"`, INTERVAL(WEEKDAY(`"+date_field+"`)) DAY), '%%Y-%%m-%%d')",
-                'months': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-01')",
-                'years': "DATE_FORMAT(`" + date_field +"`, '%%Y-01-01')",
-            }
-        }
-
-        try:
-            engine_sql = SQL[engine]
-        except KeyError:
-            raise UnsupportedEngine('%s DB engine is not supported' % engine)
-
-        try:
-            interval_sql = engine_sql[interval]
-        except KeyError:
-            raise InvalidInterval('Interval is not supported for %s DB backend.' % engine)
-
-        kwargs = {'%s__range' % date_field : (begin, end)}
-        aggregate = self.qs.extra(select = {'d': interval_sql}).\
+        kwargs = {'%s__range' % date_field : (start, end)}
+        aggregate_data = self.qs.extra(select = {'d': interval_sql}).\
                         filter(**kwargs).order_by().values('d').\
-                        annotate(agg=aggregate_class(aggregate_field))
+                        annotate(agg=aggregate)
 
-        data = dict((parse(item['d'], yearfirst=True), item['agg']) for item in aggregate)
+        data = dict((parse(item['d'], yearfirst=True), item['agg']) for item in aggregate_data)
 
         stat_list = []
-        dt = begin
+        dt = start
         while dt < end:
             value = data.get(dt, 0)
             stat_list.append((dt, value,))
             dt = dt + relativedelta(**{interval : 1})
         return stat_list
 
-
     # Aggregate totals using a date or datetime as a pivot
 
-    def until(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.pivot(dt, 'lte', date_field, aggregate_field, aggregate_class)
+    def until(self, dt, date_field=None, aggregate=None,):
+        return self.pivot(dt, 'lte', date_field, aggregate)
 
-    def until_now(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.pivot(datetime.datetime.now(), 'lte', date_field, aggregate_field, aggregate_class)
+    def until_now(self, date_field=None, aggregate=None):
+        return self.pivot(datetime.datetime.now(), 'lte', date_field, aggregate)
 
-    def after(self, dt, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.pivot(dt, 'gte', date_field, aggregate_field, aggregate_class)
+    def after(self, dt, date_field=None, aggregate=None):
+        return self.pivot(dt, 'gte', date_field, aggregate)
 
-    def after_now(self, date_field=None, aggregate_field=None, aggregate_class=None):
-        return self.pivot(datetime.datetime.now(), 'gte', date_field, aggregate_field, aggregate_class)
+    def after_now(self, date_field=None, aggregate=None):
+        return self.pivot(datetime.datetime.now(), 'gte', date_field, aggregate)
 
-    def pivot(self, dt, operator=None, date_field=None, aggregate_field=None, aggregate_class=None):
+    def pivot(self, dt, operator=None, date_field=None, aggregate=None):
         operator = operator or self.operator
         if operator not in ['lt', 'lte', 'gt', 'gte']:
             raise InvalidOperator("Please provide a valid operator.")
 
         kwargs = {'%s__%s' % (date_field or self.date_field, operator) : dt}
-        return self._aggregate(date_field, aggregate_field, aggregate_class, kwargs)
+        return self._aggregate(date_field, aggregate, kwargs)
 
     # Utility functions
     def update_today(self):
         self.today = datetime.date.today()
 
-    def _aggregate(self, date_field=None, aggregate_field=None, aggregate_class=None, filter=None):
+    def _aggregate(self, date_field=None, aggregate=None, filter=None):
         date_field = date_field or self.date_field
-        aggregate_field = aggregate_field or self.aggregate_field
-        aggregate_class = aggregate_class or self.aggregate_class
+        aggregate = aggregate or self.aggregate
 
         if not date_field:
             raise DateFieldMissing("Please provide a date_field.")
@@ -208,10 +134,5 @@ class QuerySetStats(object):
         if self.qs is None:
             raise QuerySetMissing("Please provide a queryset.")
 
-        agg = self.qs.filter(**filter).aggregate(agg=aggregate_class(aggregate_field))
+        agg = self.qs.filter(**filter).aggregate(agg=aggregate)
         return agg['agg']
-
-    def get_aggregate(self, first_day, last_day, date_field=None, aggregate_field=None, aggregate_class=None):
-        date_field = date_field or self.date_field
-        kwargs = {'%s__range' % date_field : (first_day, last_day)}
-        return self._aggregate(date_field, aggregate_field, aggregate_class, kwargs)
