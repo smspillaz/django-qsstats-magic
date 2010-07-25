@@ -1,6 +1,6 @@
-==============================================
+====================================================
 django-qsstats-magic: QuerySet statistics for Django
-==============================================
+====================================================
 
 The goal of django-qsstats is to be a microframework to make
 repetitive tasks such as generating aggregate statistics of querysets
