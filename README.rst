@@ -121,6 +121,7 @@ single aggregate result by using the following methods:
 ``for_week``
 ``for_month``
 ``for_year``
+
     Positional arguments: ``dt``, a ``datetime.datetime`` or ``datetime.date``
     object to filter the queryset to this interval (minute, hour, day, week,
     month or year).
@@ -131,6 +132,7 @@ single aggregate result by using the following methods:
 ``this_week``
 ``this_month``
 ``this_year``
+
     Wrappers around ``for_<interval>`` that uses ``dateutil.relativedelta`` to
     provide aggregate information for this current interval.
 
