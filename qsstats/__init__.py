@@ -49,7 +49,7 @@ class QuerySetStats(object):
     def time_series(self, start, end=None, interval='days',
                     date_field=None, aggregate=None, engine='mysql'):
         ''' Aggregate over time intervals '''
-        end = end or self.today + datetime.timedelta(days=1)
+        end = end or self.today
         args = [start, end, interval, date_field, aggregate]
         try:
             #TODO: engine should be guessed
