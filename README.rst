@@ -107,6 +107,12 @@ without providing enough information.
 
     Default: ``'lte'``
 
+``today``
+    The date that will be considered as today date. If ``today`` param is None
+    QuerySetStats' today will be datetime.date.today().
+
+    Default: ``None``
+
 
 All of the documented methods take a standard set of keyword arguments
 that override any information already stored within the ``QuerySetStats``

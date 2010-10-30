@@ -19,11 +19,11 @@ class QuerySetStats(object):
     is able to handle snapshots of data (for example this day, week, month, or
     year) or generate time series data suitable for graphing.
     """
-    def __init__(self, qs=None, date_field=None, aggregate=None):
+    def __init__(self, qs=None, date_field=None, aggregate=None, today=None):
         self.qs = qs
         self.date_field = date_field
         self.aggregate = aggregate or Count('id')
-        self.update_today()
+        self.today = today or self.update_today()
 
     # Aggregates for a specific period of time
 
@@ -123,6 +123,7 @@ class QuerySetStats(object):
     # Utility functions
     def update_today(self):
         self.today = datetime.date.today()
+        return self.today
 
     def _aggregate(self, date_field=None, aggregate=None, filter=None):
         date_field = date_field or self.date_field
