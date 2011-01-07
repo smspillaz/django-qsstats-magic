@@ -30,7 +30,7 @@ How many users signed up today? this month? this year?
 
 ::
 
-    from django.contrib.auth import User
+    from django.contrib.auth.models import User
     import qsstats
 
     qs = User.objects.all()
@@ -55,7 +55,7 @@ Aggregating time-series data suitable for graphing
 
 ::
 
-    from django.contrib.auth import User
+    from django.contrib.auth.modles import User
     import datetime, qsstats
 
     qs = User.objects.all()
@@ -70,6 +70,7 @@ Aggregating time-series data suitable for graphing
 This might print something like::
 
     New users in the last 7 days: [3, 10, 7, 4, 12, 9, 11]
+
 
 Please see qsstats/tests.py for similar usage examples.
 
