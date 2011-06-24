@@ -8,7 +8,7 @@ for cmd in ('egg_info', 'develop'):
 
 setup(
     name='django-qsstats-magic',
-    version='0.5.2',
+    version='0.6',
     description='A django microframework that eases the generation of aggregate data for querysets.',
     long_description = open('README.rst').read(),
     author='Matt Croydon, Mikhail Korobov',
