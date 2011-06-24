@@ -14,7 +14,7 @@ changed API, simplified internals and faster time_series implementation.
 Requirements
 ============
 
-* `python-dateutil <http://labix.org/python-dateutil>`_
+* `python-dateutil <http://labix.org/python-dateutil>`_ > 1.4, < 2.0
 * `django <http://www.djangoproject.com/>`_ 1.1+
 
 License
@@ -226,16 +226,16 @@ The test suite assumes that ``django.contrib.auth`` is installed.
 Difference from django-qsstats
 ==============================
 
-1. Faster time_series method using 1 sql query (currently works only for mysql,
-   with fallback to old method for other DB backends)
+1. Faster time_series method using 1 sql query (currently works for MySQL and
+   PostgreSQL, with a fallback to the old method for other DB backends).
 2. Single ``aggregate`` parameter instead of ``aggregate_field`` and
    ``aggregate_class``. Default value is always ``Count('id')`` and can't be
    specified in settings.py. ``QUERYSETSTATS_DEFAULT_OPERATOR`` option is also
    unsupported now.
-3. Support for minute and hour aggregates
+3. Support for minute and hour aggregates.
 4. ``start_date`` and ``end_date`` arguments are renamed to ``start`` and
    ``end`` because of 3.
-5. Internals are changed
+5. Internals are changed.
 
 I don't know if original author (Matt Croydon) would like my changes so
 I renamed a project for now. If the changes will be merged then
