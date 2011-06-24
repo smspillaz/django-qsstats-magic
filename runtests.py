@@ -3,10 +3,18 @@
 
 from django.conf import settings
 from django.core.management import call_command
+import sys
+
+engine = sys.argv[1]
 
 settings.configure(
     INSTALLED_APPS=('qsstats', 'django.contrib.auth', 'django.contrib.contenttypes'),
-    DATABASE_ENGINE = 'sqlite3',
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.' + engine,
+            'NAME': 'test'
+        }
+    }
 )
 
 if __name__ == "__main__":

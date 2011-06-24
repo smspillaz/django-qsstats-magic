@@ -53,13 +53,22 @@ def get_interval_sql(date_field, interval, engine):
             'weeks': "DATE_FORMAT(DATE_SUB(`"+date_field+"`, INTERVAL(WEEKDAY(`"+date_field+"`)) DAY), '%%Y-%%m-%%d')",
             'months': "DATE_FORMAT(`" + date_field +"`, '%%Y-%%m-01')",
             'years': "DATE_FORMAT(`" + date_field +"`, '%%Y-01-01')",
+        },
+        'postgresql': {
+            'minutes': "date_trunc('minute', %s)" % date_field,
+            'hours': "date_trunc('hour', %s)" % date_field,
+            'days': "date_trunc('day', %s)" % date_field,
+            'weeks': "date_trunc('week', %s)" % date_field,
+            'months': "date_trunc('month', %s)" % date_field,
+            'years': "date_trunc('year', %s)" % date_field,
         }
     }
 
     try:
         engine_sql = SQL[engine]
     except KeyError:
-        raise UnsupportedEngine('%s DB engine is not supported' % engine)
+        msg = '%s DB engine is not supported. Supported engines are: %s' % (engine, ", ".join(SQL.keys()))
+        raise UnsupportedEngine(msg)
 
     try:
         return engine_sql[interval]

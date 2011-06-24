@@ -24,6 +24,18 @@ class QuerySetStats(object):
         self.aggregate = aggregate or Count('id')
         self.today = today or self.update_today()
 
+    def _guess_engine(self):
+        if hasattr(self.qs, 'db'): # django 1.2+
+            engine_name = settings.DATABASES[self.qs.db]['ENGINE']
+        else:
+            engine_name = settings.DATABASE_ENGINE
+        if 'mysql' in engine_name:
+            return 'mysql'
+        if 'postg' in engine_name: #postgres, postgis
+            return 'postgresql'
+        if 'sqlite' in engine_name:
+            return 'sqlite'
+
     # Aggregates for a specific period of time
 
     def for_interval(self, interval, dt, date_field=None, aggregate=None):
@@ -44,15 +56,14 @@ class QuerySetStats(object):
             return partial(self.this_interval, name[5:])
         raise AttributeError
 
-
     def time_series(self, start, end=None, interval='days',
-                    date_field=None, aggregate=None, engine='mysql'):
+                    date_field=None, aggregate=None, engine=None):
         ''' Aggregate over time intervals '''
         end = end or self.today
         args = [start, end, interval, date_field, aggregate]
+        engine = engine or self._guess_engine()
         sid = transaction.savepoint()
         try:
-            #TODO: engine should be guessed
             return self._fast_time_series(*(args+[engine]))
         except (QuerySetStatsError, DatabaseError,):
             transaction.savepoint_rollback(sid)
@@ -75,10 +86,11 @@ class QuerySetStats(object):
         return stat_list
 
     def _fast_time_series(self, start, end, interval='days',
-                          date_field=None, aggregate=None, engine='mysql'):
+                          date_field=None, aggregate=None, engine=None):
         ''' Aggregate over time intervals using just 1 sql query '''
         date_field = date_field or self.date_field
         aggregate = aggregate or self.aggregate
+        engine = engine or self._guess_engine()
 
         start, _ = get_bounds(start, interval.rstrip('s'))
         _, end = get_bounds(end, interval.rstrip('s'))
@@ -89,7 +101,9 @@ class QuerySetStats(object):
                         filter(**kwargs).order_by().values('d').\
                         annotate(agg=aggregate)
 
-        data = dict((parse(item['d'], yearfirst=True), item['agg']) for item in aggregate_data)
+        def to_dt(d): # leave dates as-is
+            return parse(d, yearfirst=True) if isinstance(d, basestring) else d
+        data = dict((to_dt(item['d']), item['agg']) for item in aggregate_data)
 
         stat_list = []
         dt = start

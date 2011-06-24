@@ -27,3 +27,4 @@ build/
 dist/
 .build/
 MANIFEST
+django_qsstats_magic.egg-info
