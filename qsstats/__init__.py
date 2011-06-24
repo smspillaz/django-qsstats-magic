@@ -3,12 +3,11 @@ __version__ = (0, 5, 0)
 
 from functools import partial
 import datetime
-import time
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse
-from django.conf import settings
 from django.db.models import Count
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
+from django.conf import settings
 
 from qsstats.utils import get_bounds, _to_datetime, get_interval_sql
 from qsstats.exceptions import *
@@ -51,10 +50,12 @@ class QuerySetStats(object):
         ''' Aggregate over time intervals '''
         end = end or self.today
         args = [start, end, interval, date_field, aggregate]
+        sid = transaction.savepoint()
         try:
             #TODO: engine should be guessed
             return self._fast_time_series(*(args+[engine]))
         except (QuerySetStatsError, DatabaseError,):
+            transaction.savepoint_rollback(sid)
             return self._slow_time_series(*args)
 
     def _slow_time_series(self, start, end, interval='days',
@@ -100,7 +101,7 @@ class QuerySetStats(object):
 
     # Aggregate totals using a date or datetime as a pivot
 
-    def until(self, dt, date_field=None, aggregate=None,):
+    def until(self, dt, date_field=None, aggregate=None):
         return self.pivot(dt, 'lte', date_field, aggregate)
 
     def until_now(self, date_field=None, aggregate=None):
