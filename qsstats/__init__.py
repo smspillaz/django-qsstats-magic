@@ -60,6 +60,7 @@ class QuerySetStats(object):
     def time_series(self, start, end=None, interval='days',
                     date_field=None, aggregate=None, engine=None):
         ''' Aggregate over time intervals '''
+
         end = end or self.today
         args = [start, end, interval, date_field, aggregate]
         engine = engine or self._guess_engine()
@@ -82,6 +83,7 @@ class QuerySetStats(object):
             raise InvalidInterval('Interval is currently not supported.')
 
         method = getattr(self, 'for_%s' % interval[:-1])
+
         stat_list = []
         dt, end = _to_datetime(start), _to_datetime(end)
         while dt <= end:
@@ -93,6 +95,7 @@ class QuerySetStats(object):
     def _fast_time_series(self, start, end, interval='days',
                           date_field=None, aggregate=None, engine=None):
         ''' Aggregate over time intervals using just 1 sql query '''
+
         date_field = date_field or self.date_field
         aggregate = aggregate or self.aggregate
         engine = engine or self._guess_engine()
@@ -117,14 +120,14 @@ class QuerySetStats(object):
         dt = start
         while dt < end:
             idx = 0
+            value = 0
             for i in range(num):
+                value = value + data.get(dt, 0)
                 if i == 0:
-                    stat_list.append([dt, data.get(dt, 0)])
+                    stat_list.append((dt, value,))
                     idx = len(stat_list) - 1
-                else:
-                    stat_list[idx][0] = dt
-                    stat_list[idx][1] = stat_list[idx][1] + data.get(dt, 0)
-
+                elif i == num - 1:
+                    stat_list[idx] = (dt, value,)
                 dt = dt + relativedelta(**{interval : 1})
 
         return stat_list
