@@ -13,11 +13,11 @@ def _to_datetime(dt):
 
 def _parse_interval(interval):
     num = 1
-    match = re.match('(\d+)#(\w+)', interval)
-    if match:
-        num = match.group(1)
-        interval = match.group(2)
+    match = re.match('(\d+)([A-Za-z]+)', interval)
 
+    if match:
+        num = int(match.group(1))
+        interval = match.group(2)
     return num, interval
 
 def get_bounds(dt, interval):

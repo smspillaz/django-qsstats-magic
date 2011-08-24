@@ -74,8 +74,12 @@ class QuerySetStats(object):
                           date_field=None, aggregate=None):
         ''' Aggregate over time intervals using 1 sql query for one interval '''
 
-        if interval not in ['minutes', 'hours', 'days', 'weeks', 'months', 'years']:
-            raise InvalidInterval('Interval is not supported.')
+        num, interval = _parse_interval(interval)
+
+        if interval not in ['minutes', 'hours', 
+                            'days', 'weeks', 
+                            'months', 'years'] or num != 1:
+            raise InvalidInterval('Interval is currently not supported.')
 
         method = getattr(self, 'for_%s' % interval[:-1])
         stat_list = []
@@ -106,14 +110,23 @@ class QuerySetStats(object):
 
         def to_dt(d): # leave dates as-is
             return parse(d, yearfirst=True) if isinstance(d, basestring) else d
+
         data = dict((to_dt(item['d']), item['agg']) for item in aggregate_data)
 
         stat_list = []
         dt = start
         while dt < end:
-            value = data.get(dt, 0)
-            stat_list.append((dt, value,))
-            dt = dt + relativedelta(**{interval : 1})
+            idx = 0
+            for i in range(num):
+                if i == 0:
+                    stat_list.append([dt, data.get(dt, 0)])
+                    idx = len(stat_list) - 1
+                else:
+                    stat_list[idx][0] = dt
+                    stat_list[idx][1] = stat_list[idx][1] + data.get(dt, 0)
+
+                dt = dt + relativedelta(**{interval : 1})
+
         return stat_list
 
     # Aggregate totals using a date or datetime as a pivot
