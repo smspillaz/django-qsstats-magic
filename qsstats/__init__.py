@@ -1,15 +1,16 @@
-__author__ = 'Matt Croydon, Mikhail Korobov'
-__version__ = (0, 5, 0)
+__author__ = 'Matt Croydon, Mikhail Korobov, Pawel Tomasiewicz'
+__version__ = (0, 5, 1)
 
 from functools import partial
 import datetime
+import re
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse
 from django.db.models import Count
 from django.db import DatabaseError, transaction
 from django.conf import settings
 
-from qsstats.utils import get_bounds, _to_datetime, get_interval_sql
+from qsstats.utils import get_bounds, _to_datetime, _parse_interval, get_interval_sql
 from qsstats.exceptions import *
 
 class QuerySetStats(object):
@@ -59,6 +60,7 @@ class QuerySetStats(object):
     def time_series(self, start, end=None, interval='days',
                     date_field=None, aggregate=None, engine=None):
         ''' Aggregate over time intervals '''
+
         end = end or self.today
         args = [start, end, interval, date_field, aggregate]
         engine = engine or self._guess_engine()
@@ -73,10 +75,15 @@ class QuerySetStats(object):
                           date_field=None, aggregate=None):
         ''' Aggregate over time intervals using 1 sql query for one interval '''
 
-        if interval not in ['minutes', 'hours', 'days', 'weeks', 'months', 'years']:
-            raise InvalidInterval('Interval is not supported.')
+        num, interval = _parse_interval(interval)
+
+        if interval not in ['minutes', 'hours', 
+                            'days', 'weeks', 
+                            'months', 'years'] or num != 1:
+            raise InvalidInterval('Interval is currently not supported.')
 
         method = getattr(self, 'for_%s' % interval[:-1])
+
         stat_list = []
         dt, end = _to_datetime(start), _to_datetime(end)
         while dt <= end:
@@ -88,9 +95,12 @@ class QuerySetStats(object):
     def _fast_time_series(self, start, end, interval='days',
                           date_field=None, aggregate=None, engine=None):
         ''' Aggregate over time intervals using just 1 sql query '''
+
         date_field = date_field or self.date_field
         aggregate = aggregate or self.aggregate
         engine = engine or self._guess_engine()
+
+        num, interval = _parse_interval(interval)
 
         start, _ = get_bounds(start, interval.rstrip('s'))
         _, end = get_bounds(end, interval.rstrip('s'))
@@ -103,14 +113,23 @@ class QuerySetStats(object):
 
         def to_dt(d): # leave dates as-is
             return parse(d, yearfirst=True) if isinstance(d, basestring) else d
+
         data = dict((to_dt(item['d']), item['agg']) for item in aggregate_data)
 
         stat_list = []
         dt = start
         while dt < end:
-            value = data.get(dt, 0)
-            stat_list.append((dt, value,))
-            dt = dt + relativedelta(**{interval : 1})
+            idx = 0
+            value = 0
+            for i in range(num):
+                value = value + data.get(dt, 0)
+                if i == 0:
+                    stat_list.append((dt, value,))
+                    idx = len(stat_list) - 1
+                elif i == num - 1:
+                    stat_list[idx] = (dt, value,)
+                dt = dt + relativedelta(**{interval : 1})
+
         return stat_list
 
     # Aggregate totals using a date or datetime as a pivot

@@ -1,4 +1,5 @@
 import datetime
+import re
 from dateutil.relativedelta import relativedelta, MO
 from qsstats.exceptions import InvalidInterval, UnsupportedEngine
 
@@ -9,6 +10,15 @@ def _to_datetime(dt):
     if isinstance(dt, datetime.datetime):
         return dt
     return datetime.datetime(dt.year, dt.month, dt.day)
+
+def _parse_interval(interval):
+    num = 1
+    match = re.match('(\d+)([A-Za-z]+)', interval)
+
+    if match:
+        num = int(match.group(1))
+        interval = match.group(2)
+    return num, interval
 
 def get_bounds(dt, interval):
     ''' Returns interval bounds the datetime is in. '''
