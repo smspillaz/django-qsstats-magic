@@ -1,5 +1,5 @@
 __author__ = 'Matt Croydon, Mikhail Korobov, Pawel Tomasiewicz'
-__version__ = (0, 5, 1)
+__version__ = (0, 6, 2)
 
 from functools import partial
 import datetime
