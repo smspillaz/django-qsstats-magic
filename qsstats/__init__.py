@@ -3,7 +3,6 @@ __version__ = (0, 5, 1)
 
 from functools import partial
 import datetime
-import re
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse
 from django.db.models import Count
@@ -77,8 +76,8 @@ class QuerySetStats(object):
 
         num, interval = _parse_interval(interval)
 
-        if interval not in ['minutes', 'hours', 
-                            'days', 'weeks', 
+        if interval not in ['minutes', 'hours',
+                            'days', 'weeks',
                             'months', 'years'] or num != 1:
             raise InvalidInterval('Interval is currently not supported.')
 
