@@ -1,7 +1,8 @@
+import datetime
+
 from django.test import TestCase
 from django.contrib.auth.models import User
 from qsstats import QuerySetStats, InvalidInterval, DateFieldMissing, QuerySetMissing
-import datetime
 
 class QuerySetStatsTestCase(TestCase):
     def test_basic_today(self):

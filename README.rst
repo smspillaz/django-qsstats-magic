@@ -218,10 +218,14 @@ time-series data which may be extremely using in plotting data:
 Testing
 =======
 
-If you'd like to test ``django-qsstats`` against your local configuration, add
+If you'd like to test ``django-qsstats-magic`` against your local configuration, add
 ``qsstats`` to your ``INSTALLED_APPS`` and run ``./manage.py test qsstats``.
 The test suite assumes that ``django.contrib.auth`` is installed.
 
+For testing against different python, DB and django versions install tox
+(pip install tox) and run 'tox' from the source checkout::
+
+    $ tox
 
 Difference from django-qsstats
 ==============================

@@ -12,6 +12,7 @@ syntax: glob
 *.orig
 *.swp
 *~
+.tox
 
 #misc files
 pip-log.txt
