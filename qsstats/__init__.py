@@ -5,11 +5,13 @@ from functools import partial
 import datetime
 from dateutil.relativedelta import relativedelta
 from dateutil.parser import parse
+
 from django.db.models import Count
 from django.db import DatabaseError, transaction
 from django.conf import settings
 
-from qsstats.utils import get_bounds, _to_datetime, _parse_interval, get_interval_sql
+from qsstats.utils import get_bounds, _to_datetime, _parse_interval, get_interval_sql, _remove_time
+from qsstats import compat
 from qsstats.exceptions import *
 
 class QuerySetStats(object):
@@ -110,8 +112,11 @@ class QuerySetStats(object):
                         filter(**kwargs).order_by().values('d').\
                         annotate(agg=aggregate)
 
-        def to_dt(d): # leave dates as-is
-            return parse(d, yearfirst=True) if isinstance(d, basestring) else d
+        today = _remove_time(compat.now())
+        def to_dt(d):
+            if isinstance(d, basestring):
+                return parse(d, yearfirst=True, default=today)
+            return d
 
         data = dict((to_dt(item['d']), item['agg']) for item in aggregate_data)
 
@@ -137,13 +142,13 @@ class QuerySetStats(object):
         return self.pivot(dt, 'lte', date_field, aggregate)
 
     def until_now(self, date_field=None, aggregate=None):
-        return self.pivot(datetime.datetime.now(), 'lte', date_field, aggregate)
+        return self.pivot(compat.now(), 'lte', date_field, aggregate)
 
     def after(self, dt, date_field=None, aggregate=None):
         return self.pivot(dt, 'gte', date_field, aggregate)
 
     def after_now(self, date_field=None, aggregate=None):
-        return self.pivot(datetime.datetime.now(), 'gte', date_field, aggregate)
+        return self.pivot(compat.now(), 'gte', date_field, aggregate)
 
     def pivot(self, dt, operator=None, date_field=None, aggregate=None):
         operator = operator or self.operator
@@ -155,7 +160,8 @@ class QuerySetStats(object):
 
     # Utility functions
     def update_today(self):
-        self.today = datetime.date.today()
+        _now = compat.now()
+        self.today = _remove_time(_now)
         return self.today
 
     def _aggregate(self, date_field=None, aggregate=None, filter=None):

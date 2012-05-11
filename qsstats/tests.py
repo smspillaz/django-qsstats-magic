@@ -1,8 +1,11 @@
+from __future__ import absolute_import
 import datetime
 
 from django.test import TestCase
 from django.contrib.auth.models import User
 from qsstats import QuerySetStats, InvalidInterval, DateFieldMissing, QuerySetMissing
+from qsstats import compat
+from .utils import _remove_time
 
 class QuerySetStatsTestCase(TestCase):
     def test_basic_today(self):
@@ -20,8 +23,7 @@ class QuerySetStatsTestCase(TestCase):
         # We should only see a single user
         self.assertEqual(qss.this_day(), 1)
 
-    def test_time_series(self):
-        today = datetime.date.today()
+    def assertTimeSeriesWorks(self, today):
         seven_days_ago = today - datetime.timedelta(days=7)
         for j in range(1,8):
             for i in range(0,j):
@@ -33,10 +35,18 @@ class QuerySetStatsTestCase(TestCase):
         time_series = qss.time_series(seven_days_ago, today)
         self.assertEqual([t[1] for t in time_series], [0, 1, 2, 3, 4, 5, 6, 7])
 
+    def test_time_series(self):
+        _now = compat.now()
+        today = _remove_time(_now)
+        self.assertTimeSeriesWorks(today)
+
+    def test_time_series_naive(self):
+        self.assertTimeSeriesWorks(datetime.date.today())
+
     def test_until(self):
-        today = datetime.date.today()
+        now = compat.now()
+        today = _remove_time(now)
         yesterday = today - datetime.timedelta(days=1)
-        now = datetime.datetime.now()
 
         u = User.objects.create_user('u', 'u@example.com')
         u.date_joined = today
@@ -51,9 +61,9 @@ class QuerySetStatsTestCase(TestCase):
         self.assertEqual(qss.until_now(), 1)
 
     def test_after(self):
-        today = datetime.date.today()
+        now = compat.now()
+        today = _remove_time(now)
         tomorrow = today + datetime.timedelta(days=1)
-        now = datetime.datetime.now()
 
         u = User.objects.create_user('u', 'u@example.com')
         u.date_joined = today
