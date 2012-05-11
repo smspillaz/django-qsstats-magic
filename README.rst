@@ -227,6 +227,9 @@ For testing against different python, DB and django versions install tox
 
     $ tox
 
+Db user 'qsstats_test' with password 'qsstats_test' and a DB 'qsstats_test'
+should exist.
+
 Difference from django-qsstats
 ==============================
 
