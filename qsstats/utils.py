@@ -78,7 +78,7 @@ def get_interval_sql(date_field, interval, engine):
             'minutes': "strftime('%%Y-%%m-%%d %%H:%%M', `" + date_field + "`)",
             'hours': "strftime('%%Y-%%m-%%d %%H:00', `" + date_field + "`)",
             'days': "strftime('%%Y-%%m-%%d', `" + date_field + "`)",
-            # TODO: 'weeks': "strftime(DATE_SUB(`"+date_field+"`, INTERVAL(WEEKDAY(`"+date_field+"`)) DAY), '%%Y-%%m-%%d')",
+            'weeks':  "strftime('%%Y-%%W', `" + date_field + "`)",
             'months': "strftime('%%Y-%%m-01', `" + date_field + "`)",          
             'years': "strftime('%%Y-01-01', `" + date_field + "`)",                     
         },
