@@ -73,7 +73,16 @@ def get_interval_sql(date_field, interval, engine):
             'weeks': "date_trunc('week', %s)" % date_field,
             'months': "date_trunc('month', %s)" % date_field,
             'years': "date_trunc('year', %s)" % date_field,
-        }
+        },
+        'sqlite': {
+            'minutes': "strftime('%%Y-%%m-%%d %%H:%%M', `" + date_field + "`)",
+            'hours': "strftime('%%Y-%%m-%%d %%H:00', `" + date_field + "`)",
+            'days': "strftime('%%Y-%%m-%%d', `" + date_field + "`)",
+            # TODO: 'weeks': "strftime(DATE_SUB(`"+date_field+"`, INTERVAL(WEEKDAY(`"+date_field+"`)) DAY), '%%Y-%%m-%%d')",
+            'months': "strftime('%%Y-%%m-01', `" + date_field + "`)",          
+            'years': "strftime('%%Y-01-01', `" + date_field + "`)",                     
+        },
+        
     }
 
     try:
