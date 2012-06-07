@@ -15,7 +15,7 @@ Requirements
 ============
 
 * `python-dateutil <http://labix.org/python-dateutil>`_ > 1.4, < 2.0
-* `django <http://www.djangoproject.com/>`_ 1.1+
+* `django <http://www.djangoproject.com/>`_ 1.2+
 
 License
 =======
