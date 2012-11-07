@@ -55,7 +55,7 @@ Aggregating time-series data suitable for graphing
 
 ::
 
-    from django.contrib.auth.modles import User
+    from django.contrib.auth.models import User
     import datetime, qsstats
 
     qs = User.objects.all()
