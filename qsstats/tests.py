@@ -43,6 +43,17 @@ class QuerySetStatsTestCase(TestCase):
     def test_time_series_naive(self):
         self.assertTimeSeriesWorks(datetime.date.today())
 
+    def test_time_series_weeks(self):
+        today = datetime.date.today()
+
+        u = User.objects.create_user('user', 'user@example.com')
+        u.date_joined = today
+        u.save()
+
+        qs = User.objects.all()
+        qss = QuerySetStats(qs, 'date_joined')
+        qss.time_series(today - datetime.timedelta(days=30), today, interval='weeks')
+
     def test_until(self):
         now = compat.now()
         today = _remove_time(now)
