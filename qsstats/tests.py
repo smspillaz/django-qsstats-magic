@@ -44,15 +44,15 @@ class QuerySetStatsTestCase(TestCase):
         self.assertTimeSeriesWorks(datetime.date.today())
 
     def test_time_series_weeks(self):
-        today = datetime.date.today()
+        day = datetime.date(year=2013, month=4, day=5)
 
         u = User.objects.create_user('user', 'user@example.com')
-        u.date_joined = today
+        u.date_joined = day
         u.save()
 
         qs = User.objects.all()
         qss = QuerySetStats(qs, 'date_joined')
-        qss.time_series(today - datetime.timedelta(days=30), today, interval='weeks')
+        qss.time_series(day - datetime.timedelta(days=30), day, interval='weeks')
 
     def test_until(self):
         now = compat.now()
