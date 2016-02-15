@@ -88,7 +88,7 @@ def get_interval_sql(date_field, interval, engine):
     try:
         engine_sql = SQL[engine]
     except KeyError:
-        msg = '%s DB engine is not supported. Supported engines are: %s' % (engine, ", ".join(SQL.keys()))
+        msg = '%s DB engine is not supported. Supported engines are: %s' % (engine, ", ".join(list(SQL.keys())))
         raise UnsupportedEngine(msg)
 
     try:
