@@ -116,7 +116,7 @@ class QuerySetStats(object):
         def to_dt(d):
             if isinstance(d, str):
                 return parse(d, yearfirst=True, default=today)
-            return d
+            return d.replace(tzinfo=None)
 
         data = dict((to_dt(item['d']), item['agg']) for item in aggregate_data)
 
